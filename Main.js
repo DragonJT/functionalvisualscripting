@@ -54,8 +54,8 @@ function Draw(){
                 ctx.strokeStyle = 'cyan';
                 ctx.beginPath();
                 ctx.lineWidth = 3;
-                ctx.moveTo(s.x, s.y+15);
-                ctx.lineTo(i.x+100, i.y+15);
+                ctx.moveTo(deltax+s.x, deltay+s.y+15);
+                ctx.lineTo(deltax+i.x+100, deltay+i.y+15);
                 ctx.stroke();
             }
         }
@@ -85,24 +85,27 @@ function Draw(){
             rectFillStyle = 'rgb(255,150,255)';
         }
         ctx.fillStyle = rectFillStyle;
-        ctx.fillRect(s.x, s.y, 100, 30);
+        ctx.fillRect(deltax+s.x, deltay+s.y, 100, 30);
         ctx.fillStyle = textFillStyle;
         if(s.value){
-            ctx.fillText(s.value, s.x, s.y+20);
+            ctx.fillText(s.value, deltax+s.x, deltay+s.y+20);
         }
         else{
-            ctx.fillText(s.type, s.x, s.y+20);
+            ctx.fillText(s.type, deltax+s.x, deltay+s.y+20);
         }
         if(selected == s){
             ctx.strokeStyle = 'white';
             ctx.lineWidth = 3;
-            ctx.strokeRect(s.x, s.y, 100, 30);
+            ctx.strokeRect(deltax+s.x, deltay+s.y, 100, 30);
         }
     }
     ctx.fillStyle = 'cyan';
     ctx.fillText(text,0,60);
 }
 
+var mousedragging = false;
+var deltax = 0;
+var deltay = 0;
 var mouseposx;
 var mouseposy;
 var text = '';
@@ -270,6 +273,11 @@ function Resize(){
 }
 
 function MouseMove(e){
+    if(mousedragging){
+        deltax-=mouseposx - e.clientX;
+        deltay-=mouseposy - e.clientY;
+        Draw();
+    }
     mouseposx = e.clientX;
     mouseposy = e.clientY;
 }
@@ -322,10 +330,18 @@ function Save(){
 function FindScript(){
     var scripts = FindAllScripts();
     for(var s of scripts){
-        if(ContainsRect(s.x, s.y, 100, 30, mouseposx, mouseposy)){
+        if(ContainsRect(s.x+deltax, s.y+deltay, 100, 30, mouseposx, mouseposy)){
             return s;
         }
     }
+}
+
+function MouseDown(){
+    mousedragging = true;
+}
+
+function MouseUp(){
+    mousedragging = false;
 }
 
 function KeyDown(e){
@@ -399,6 +415,8 @@ function KeyDown(e){
 }
 
 Awake();
+addEventListener('mousedown', MouseDown);
+addEventListener('mouseup', MouseUp);
 addEventListener('keydown', KeyDown);
 addEventListener('mousemove', MouseMove);
 addEventListener('resize', Resize);
