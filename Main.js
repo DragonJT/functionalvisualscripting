@@ -9,36 +9,52 @@ function CreateCanvas(){
     return canvas.getContext('2d');
 }
 
-function FindScripts(scripts, script, depth, total){
-    script.depthx = depth;
-    script.depthy = total.value;
-    scripts.push(script);
-    if(script.inputs && script.inputs.length > 0){
-        for(var i of script.inputs){
-            FindScripts(scripts, i, depth+1, total);
+function FindAllScripts(){
+    function FindScripts(scripts, script, depth, total){
+        script.depthx = depth;
+        script.depthy = total.value;
+        scripts.push(script);
+        if(script.inputs && script.inputs.length > 0){
+            for(var i of script.inputs){
+                if(!scripts.includes(i)){
+                    FindScripts(scripts, i, depth+1, total);
+                }
+            }
+        }
+        else{
+            total.value++;
         }
     }
-    else{
-        total.value++;
-    }
-}
 
-function FindMaxAtDepthX(scripts, depthx){
-    var maxy;
-    for(var script of scripts){
-        if(script.depthx == depthx){
-            if(maxy == undefined || script.depthy>maxy){
-                maxy = script.depthy;
+    function SetParents(scripts){
+        for(var script of scripts){
+            script.parents = [];
+        }
+        for(var script of scripts){
+            if(script.inputs){
+                for(var i of script.inputs){
+                    i.parents.push(script);
+                }
             }
         }
     }
-    return maxy;
-}
+    
+    function FindMaxAtDepthX(scripts, depthx){
+        var maxy;
+        for(var script of scripts){
+            if(script.depthx == depthx){
+                if(maxy == undefined || script.depthy>maxy){
+                    maxy = script.depthy;
+                }
+            }
+        }
+        return maxy;
+    }
 
-function FindAllScripts(){
     var scripts = [];
     var total = {value:0};
-    FindScripts(scripts, script, 0, total);
+    FindScripts(scripts, root, 0, total);
+    SetParents(scripts);
     for(var s of scripts){
         s.x = window.innerWidth-(s.depthx+1)*120;
         var range = FindMaxAtDepthX(scripts, s.depthx);
@@ -109,16 +125,17 @@ function Draw(){
 
 var frame = 0;
 var mousedragging = false;
+var dragFromScript;
 var deltax = 0;
 var deltay = 0;
 var mouseposx;
 var mouseposy;
 var text = '';
 var updateFunc;
-var script = {type:'?'};
+var root = {type:'Root', inputs:[]};
 var functions = [];
 var binaryOps = [];
-var selected = script;
+var selected = root;
 var ctx = CreateCanvas();
 
 
@@ -161,6 +178,7 @@ function Awake(){
     }
     return result;
     `);
+    AddFunction('Random', [], 'return Math.random();');
     AddFunction('Rect', ['x','y','w','h'], 'return {x,y,w,h};');
     AddFunction('Vector2', ['x','y'], 'return {x,y};');
     AddFunction('Color', ['r','g','b'], 'return {r,g,b};');
@@ -190,8 +208,10 @@ function FindSelected(script){
 
 function Run(){
     function Emit(){
+        var scriptsUsed = [];
         var functionsUsed = [];
-    
+        var variables = [];
+
         function EmitArgs(func){
             var result = '';
             for(var i=0;i<func.args.length;i++){
@@ -202,12 +222,26 @@ function Run(){
             }
             return result;
         }
+
+        function CreateVariableToEmit(script){
+            if(script.parents.length>1){
+                var scriptUsed = scriptsUsed.find(s=>s.script == script);
+                if(scriptUsed){
+                    return scriptUsed.varname;
+                }
+                var varname = 'variable'+variables.length; 
+                variables.push('var '+varname+'='+EmitScript(script)+';\n');
+                scriptsUsed.push({script, varname});
+                return varname;
+            }
+            return EmitScript(script);
+        }
     
         function EmitScript(script){
             function EmitParams(){
                 var result = '';
                 for(var i=0;i<script.inputs.length;i++){
-                    result+=EmitScript(script.inputs[i]);
+                    result+=CreateVariableToEmit(script.inputs[i]);
                     if(i<script.inputs.length-1){
                         result+=',';
                     }
@@ -215,23 +249,30 @@ function Run(){
                 return result;
             }
             var type = script.type;
-            if(type == 'number'){
+            if(type == 'Root'){
+                var result = '';
+                for(var i of script.inputs){
+                    result+=CreateVariableToEmit(i)+';\n';
+                }
+                return result;
+            }
+            else if(type == 'number'){
                 return script.value;
             }
             else if(type == 'text'){
                 return '"'+script.value+'"';
             }
             else if(binaryOps.includes(type)){
-                return '('+EmitScript(script.inputs[0]) + type + EmitScript(script.inputs[1])+')';
+                return '('+CreateVariableToEmit(script.inputs[0]) + type + CreateVariableToEmit(script.inputs[1])+')';
             }
             else if(type == '[]'){
                 return '['+EmitParams()+']';
             }
             else if(type == '=>'){
-                return '('+script.inputs[0].value+')=>{return '+EmitScript(script.inputs[1])+';}';
+                return '('+script.inputs[0].value+')=>{return '+CreateVariableToEmit(script.inputs[1])+';}';
             }
             else if(type == '...'){
-                return '...'+EmitScript(script.inputs[0]);
+                return '...'+CreateVariableToEmit(script.inputs[0]);
             }
             else if(type == 'GetVariable'){
                 return script.value;
@@ -249,12 +290,16 @@ function Run(){
                 }
             }
         }
-        var emittedCode = EmitScript(script);
+        var emittedCode = EmitScript(root);        
         var funcsCode = '';
         for(var f of functionsUsed){
             funcsCode += 'function '+f.name+'('+EmitArgs(f)+'){\n'+f.code+'}\n';
         }
-        return funcsCode + emittedCode +';\n';
+        var emittedVariables = '';
+        for(var v of variables){
+            emittedVariables+=v;
+        }
+        return funcsCode + emittedVariables + emittedCode;
     }
     var code = Emit();
     updateFunc = new Function('ctx', 'frame', code);
@@ -267,7 +312,7 @@ function ReplaceScript(type, value, numinputs){
     for(var i=0;i<numinputs;i++){
         selected.inputs.push({type:'?'});
     }
-    selected = FindSelected(script);
+    selected = FindSelected(root);
 }
 
 function JArray(...inputs){
@@ -281,6 +326,33 @@ function ContainsRect(x,y,w,h,px,py){
 function Resize(){
     ctx.canvas.width = window.innerWidth;
     ctx.canvas.height = window.innerHeight;
+}
+
+function MouseDown(){
+    var script = FindScript();
+    if(script){
+        dragFromScript = script;
+    }
+    else{
+        mousedragging = true;
+    }
+}
+
+function MouseUp(){
+    if(dragFromScript){
+        var script = FindScript();
+        if(script){
+            var dragToScript = script;
+            if(dragFromScript.type == '?'){
+                for(var p of dragFromScript.parents){
+                    var index = p.inputs.findIndex(i=>dragFromScript==i);
+                    p.inputs[index] = dragToScript;
+                }
+            }
+            dragFromScript = undefined;
+        }
+    }
+    mousedragging = false;
 }
 
 function MouseMove(e){
@@ -334,7 +406,7 @@ function SaveFile(filename, text){
 }
 
 function Save(){
-    SaveFile('file.json', JSON.stringify(RemoveUnnecessaryFieldsInScript(script)));
+    SaveFile('file.json', JSON.stringify(RemoveUnnecessaryFieldsInScript(root)));
 }
 
 function FindScript(){
@@ -344,14 +416,6 @@ function FindScript(){
             return s;
         }
     }
-}
-
-function MouseDown(){
-    mousedragging = true;
-}
-
-function MouseUp(){
-    mousedragging = false;
 }
 
 function Update(){
@@ -367,9 +431,9 @@ function KeyDown(e){
     if(e.ctrlKey){
         if(e.key == '='){
             var s = FindScript();
-            if(s){
+            if(s && (s.type == '[]' || s.type == 'Root')){
                 s.inputs.push({type:'?'});
-                selected = FindSelected(script);
+                selected = FindSelected(root);
             }
         }
         else if(e.key == 'r'){
@@ -393,7 +457,6 @@ function KeyDown(e){
                     s.type = text;
                 }
                 else if(binaryOps.includes(text)){
-                    console.log('HERE');
                     s.type = text;
                 }
             }
@@ -402,7 +465,7 @@ function KeyDown(e){
             var index = parseInt(text);
             text = '';
             var s = FindScript();
-            if(s && s.type == '[]'){
+            if(s && (s.type == '[]' || s.type == 'Root')){
                 s.inputs.splice(index, 0, {type:'?'});
             }
         }
@@ -452,5 +515,5 @@ addEventListener('mouseup', MouseUp);
 addEventListener('keydown', KeyDown);
 addEventListener('mousemove', MouseMove);
 addEventListener('resize', Resize);
-document.body.appendChild(FileLoader({x:0,y:0,width:150,height:25}, f=>{script = JSON.parse(f);}));
+document.body.appendChild(FileLoader({x:0,y:0,width:150,height:25}, f=>{root = JSON.parse(f);}));
 Update();
