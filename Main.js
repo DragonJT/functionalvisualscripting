@@ -9,38 +9,42 @@ function CreateCanvas(){
     return canvas.getContext('2d');
 }
 
-function FindScripts(scripts, script, depth){
-    script.depth = depth;
+function FindScripts(scripts, script, depth, total){
+    script.depthx = depth;
+    script.depthy = total.value;
     scripts.push(script);
-    if(script.inputs){
+    if(script.inputs && script.inputs.length > 0){
         for(var i of script.inputs){
-            FindScripts(scripts, i, depth+1);
+            FindScripts(scripts, i, depth+1, total);
         }
     }
+    else{
+        total.value++;
+    }
+}
+
+function FindMaxAtDepthX(scripts, depthx){
+    var maxy;
+    for(var script of scripts){
+        if(script.depthx == depthx){
+            if(maxy == undefined || script.depthy>maxy){
+                maxy = script.depthy;
+            }
+        }
+    }
+    return maxy;
 }
 
 function FindAllScripts(){
     var scripts = [];
-    FindScripts(scripts, script, 0);
+    var total = {value:0};
+    FindScripts(scripts, script, 0, total);
     for(var s of scripts){
-        s.x = window.innerWidth-(s.depth+1)*120;
-        s.y = FindY(scripts, s)*40+300;
+        s.x = window.innerWidth-(s.depthx+1)*120;
+        var range = FindMaxAtDepthX(scripts, s.depthx);
+        s.y = s.depthy*24 + window.innerHeight*0.5 - range*12;
     }
     return scripts;
-}
-
-function FindY(scripts, script){
-    var y=0;
-    var totalY=0;
-    for(var s of scripts){
-        if(s == script){
-            y=totalY;
-        }
-        if(s.depth == script.depth){
-            totalY++;
-        }
-    }
-    return y - totalY*0.5;
 }
 
 function Draw(){
@@ -54,8 +58,8 @@ function Draw(){
                 ctx.strokeStyle = 'cyan';
                 ctx.beginPath();
                 ctx.lineWidth = 3;
-                ctx.moveTo(deltax+s.x, deltay+s.y+15);
-                ctx.lineTo(deltax+i.x+100, deltay+i.y+15);
+                ctx.moveTo(deltax+s.x, deltay+s.y+10);
+                ctx.lineTo(deltax+i.x+100, deltay+i.y+10);
                 ctx.stroke();
             }
         }
@@ -85,18 +89,18 @@ function Draw(){
             rectFillStyle = 'rgb(255,150,255)';
         }
         ctx.fillStyle = rectFillStyle;
-        ctx.fillRect(deltax+s.x, deltay+s.y, 100, 30);
+        ctx.fillRect(deltax+s.x, deltay+s.y, 100, 20);
         ctx.fillStyle = textFillStyle;
         if(s.value){
-            ctx.fillText(s.value, deltax+s.x, deltay+s.y+20);
+            ctx.fillText(s.value, deltax+s.x, deltay+s.y+15);
         }
         else{
-            ctx.fillText(s.type, deltax+s.x, deltay+s.y+20);
+            ctx.fillText(s.type, deltax+s.x, deltay+s.y+15);
         }
         if(selected == s){
             ctx.strokeStyle = 'white';
             ctx.lineWidth = 3;
-            ctx.strokeRect(deltax+s.x, deltay+s.y, 100, 30);
+            ctx.strokeRect(deltax+s.x, deltay+s.y, 100, 20);
         }
     }
     ctx.fillStyle = 'cyan';
