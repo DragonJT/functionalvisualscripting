@@ -137,6 +137,12 @@ function Awake(){
             ctx.font = o.fontsize+'px Arial';
             ctx.fillText(o.text, o.position.x, o.position.y);
         }
+        else if(o.type == 'FillCircle'){
+            ctx.fillStyle = 'rgb('+o.color.r+','+o.color.g+','+o.color.b+')'; 
+            ctx.beginPath();
+            ctx.arc(o.position.x, o.position.y, o.radius, 0, 2 * Math.PI);
+            ctx.fill();
+        }
     }
     `);
     AddFunction('Print', ['value'], 'console.log(value);');
@@ -158,6 +164,7 @@ function Awake(){
     AddFunction('Vector2', ['x','y'], 'return {x,y};');
     AddFunction('Color', ['r','g','b'], 'return {r,g,b};');
     AddFunction('FillRect', ['rect','color'], "return {type:'FillRect',rect,color};");
+    AddFunction('FillCircle', ['position','radius','color'], "return {type:'FillCircle',position,radius,color};");
     AddFunction('FillText', ['position','text','fontsize','color'], "return {type:'FillText',position,text,fontsize,color};");
     binaryOps.push('+', '*', '/', '-');
 }
@@ -375,6 +382,14 @@ function KeyDown(e){
             var s = FindScript();
             if(s && functions.find(f=>f.name == text)){
                 s.type = text;
+            }
+        }
+        else if(e.key == 'i'){
+            var index = parseInt(text);
+            text = '';
+            var s = FindScript();
+            if(s && s.type == '[]'){
+                s.inputs.splice(index, 0, {type:'?'});
             }
         }
     }
