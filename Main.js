@@ -107,16 +107,17 @@ function Draw(){
     ctx.fillText(text,0,60);
 }
 
+var frame = 0;
 var mousedragging = false;
 var deltax = 0;
 var deltay = 0;
 var mouseposx;
 var mouseposy;
 var text = '';
+var updateFunc;
 var script = {type:'?'};
 var functions = [];
 var binaryOps = [];
-var variables = {};
 var selected = script;
 var ctx = CreateCanvas();
 
@@ -166,7 +167,7 @@ function Awake(){
     AddFunction('FillRect', ['rect','color'], "return {type:'FillRect',rect,color};");
     AddFunction('FillCircle', ['position','radius','color'], "return {type:'FillCircle',position,radius,color};");
     AddFunction('FillText', ['position','text','fontsize','color'], "return {type:'FillText',position,text,fontsize,color};");
-    binaryOps.push('+', '*', '/', '-');
+    binaryOps.push('+', '*', '/', '-', '%');
 }
 
 function IsDigit(c){
@@ -256,7 +257,7 @@ function Run(){
         return funcsCode + emittedCode +';\n';
     }
     var code = Emit();
-    new Function('ctx', code)(ctx);
+    updateFunc = new Function('ctx', 'frame', code);
 }
 
 function ReplaceScript(type, value, numinputs){
@@ -280,14 +281,12 @@ function ContainsRect(x,y,w,h,px,py){
 function Resize(){
     ctx.canvas.width = window.innerWidth;
     ctx.canvas.height = window.innerHeight;
-    Draw();
 }
 
 function MouseMove(e){
     if(mousedragging){
         deltax-=mouseposx - e.clientX;
         deltay-=mouseposy - e.clientY;
-        Draw();
     }
     mouseposx = e.clientX;
     mouseposy = e.clientY;
@@ -355,6 +354,15 @@ function MouseUp(){
     mousedragging = false;
 }
 
+function Update(){
+    Draw();
+    if(updateFunc){
+        updateFunc(ctx, frame);
+    }
+    frame++;
+    requestAnimationFrame(Update);
+}
+
 function KeyDown(e){
     if(e.ctrlKey){
         if(e.key == '='){
@@ -380,8 +388,14 @@ function KeyDown(e){
         }
         else if(e.key == 'Enter'){
             var s = FindScript();
-            if(s && functions.find(f=>f.name == text)){
-                s.type = text;
+            if(s){
+                if(functions.find(f=>f.name == text)){
+                    s.type = text;
+                }
+                else if(binaryOps.includes(text)){
+                    console.log('HERE');
+                    s.type = text;
+                }
             }
         }
         else if(e.key == 'i'){
@@ -430,7 +444,6 @@ function KeyDown(e){
         }
     }
     
-    Draw();
 }
 
 Awake();
@@ -439,5 +452,5 @@ addEventListener('mouseup', MouseUp);
 addEventListener('keydown', KeyDown);
 addEventListener('mousemove', MouseMove);
 addEventListener('resize', Resize);
-Draw();
-document.body.appendChild(FileLoader({x:0,y:0,width:150,height:25}, f=>{script = JSON.parse(f); Draw(); }));
+document.body.appendChild(FileLoader({x:0,y:0,width:150,height:25}, f=>{script = JSON.parse(f);}));
+Update();
